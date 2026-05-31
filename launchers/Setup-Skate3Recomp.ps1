@@ -354,47 +354,34 @@ function Start-Skate3SetupGui {
   $statusBox.Text = "Ready. Folder created if it was missing."
   $form.Controls.Add($statusBox)
 
-  $worker = New-Object System.ComponentModel.BackgroundWorker
-  $worker.WorkerReportsProgress = $true
-
-  $worker.add_DoWork({
-    param($sender, $eventArgs)
-    $result = Invoke-Skate3Setup -StartGame:$false -StatusCallback {
-      param($message)
-      $sender.ReportProgress(0, $message)
-    }
-    $eventArgs.Result = $result
-  })
-
-  $worker.add_ProgressChanged({
-    param($sender, $eventArgs)
-    $statusBox.AppendText([Environment]::NewLine + [string]$eventArgs.UserState)
-  })
-
-  $worker.add_RunWorkerCompleted({
-    param($sender, $eventArgs)
-    $progress.MarqueeAnimationSpeed = 0
-    $setupButton.Enabled = $true
-    $openFolder.Enabled = $true
-    $launchAfter.Enabled = $true
-    if ($eventArgs.Error) {
-      $statusBox.AppendText([Environment]::NewLine + "Setup failed: " + $eventArgs.Error.Message)
-      [System.Windows.Forms.MessageBox]::Show($form, $eventArgs.Error.Message, "Setup failed", "OK", "Error") | Out-Null
-      return
-    }
-    $statusBox.AppendText([Environment]::NewLine + "Done.")
-    if ($launchAfter.Checked) {
-      Start-Process -FilePath $paths.LauncherPath | Out-Null
-    }
-  })
-
   $setupButton.Add_Click({
     $setupButton.Enabled = $false
     $openFolder.Enabled = $false
     $launchAfter.Enabled = $false
     $progress.MarqueeAnimationSpeed = 30
     $statusBox.Text = "Starting setup..."
-    $worker.RunWorkerAsync()
+    $form.Refresh()
+
+    try {
+      $result = Invoke-Skate3Setup -StartGame:$false -StatusCallback {
+        param($message)
+        $statusBox.AppendText([Environment]::NewLine + [string]$message)
+        $form.Refresh()
+      }
+      $statusBox.AppendText([Environment]::NewLine + "Done.")
+      if ($launchAfter.Checked) {
+        Start-Process -FilePath $paths.LauncherPath | Out-Null
+      }
+    } catch {
+      $errorMessage = $_.Exception.Message
+      $statusBox.AppendText([Environment]::NewLine + "Setup failed: " + $errorMessage)
+      [System.Windows.Forms.MessageBox]::Show($form, $errorMessage, "Setup failed", "OK", "Error") | Out-Null
+    } finally {
+      $progress.MarqueeAnimationSpeed = 0
+      $setupButton.Enabled = $true
+      $openFolder.Enabled = $true
+      $launchAfter.Enabled = $true
+    }
   })
 
   [void]$form.ShowDialog()
